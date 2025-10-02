@@ -1,0 +1,1738 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulador de Guerra Aérea</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background: #1a2332;
+            font-family: Arial, sans-serif;
+            cursor: crosshair;
+        }
+        
+        #hud {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(0, 25, 0, 0.9);
+            color: #00ff41;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            border: 2px solid #00ff41;
+            font-weight: bold;
+            font-size: 12px;
+            z-index: 100;
+        }
+        
+        #targeting {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(50, 0, 0, 0.9);
+            color: #ff4444;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            border: 2px solid #ff4444;
+            font-weight: bold;
+            text-align: center;
+            font-size: 12px;
+            z-index: 100;
+        }
+        
+        #controls {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            border: 2px solid #4444ff;
+            font-size: 11px;
+            z-index: 100;
+        }
+        
+        #battlefield {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            background: rgba(40, 20, 0, 0.9);
+            color: #ffaa44;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            border: 2px solid #ffaa44;
+            font-weight: bold;
+            font-size: 11px;
+            z-index: 100;
+        }
+        
+        #weapons {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            background: rgba(40, 0, 40, 0.9);
+            color: #ff44aa;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            border: 2px solid #ff44aa;
+            font-weight: bold;
+            text-align: center;
+            font-size: 11px;
+            z-index: 100;
+        }
+        
+        .crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 30px;
+            height: 30px;
+            border: 2px solid #00ff41;
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 150;
+        }
+        
+        .crosshair::before,
+        .crosshair::after {
+            content: '';
+            position: absolute;
+            background: #00ff41;
+        }
+        
+        .crosshair::before {
+            width: 2px;
+            height: 20px;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+        
+        .crosshair::after {
+            width: 20px;
+            height: 2px;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+        
+        .target-box {
+            position: absolute;
+            border: 3px solid #ff4444;
+            pointer-events: none;
+            z-index: 200;
+            animation: pulse 1s infinite;
+        }
+        
+        .air-target {
+            width: 60px;
+            height: 60px;
+            border-radius: 8px;
+        }
+        
+        .ground-target {
+            width: 80px;
+            height: 50px;
+            border-radius: 4px;
+        }
+        
+        .locked {
+            border-color: #ff0000 !important;
+            animation: blink 0.3s infinite !important;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 0.8; }
+            50% { opacity: 1; }
+            100% { opacity: 0.8; }
+        }
+        
+        @keyframes blink {
+            0% { border-color: #ff0000; }
+            50% { border-color: #ffffff; }
+            100% { border-color: #ff0000; }
+        }
+    </style>
+</head>
+<body>
+    <div id="controls">
+        <div><strong>CONTROLES:</strong></div>
+        <div>Vuelo: W/S/A/D/↑/↓/Q/E</div>
+        <div>Cañones: SPACE</div>
+        <div>Misiles: X</div>
+        <div>Target Avión: T</div>
+        <div>Target Tanque: Y</div>
+        <div>Lock: R</div>
+        <div>Cámara: Click Der + Mouse</div>
+        <div>Zoom: Scroll</div>
+        <div>Reset: C</div>
+    </div>
+    
+    <div id="hud">
+        <div><strong>VUELO</strong></div>
+        <div>ALT: <span id="altitude">150</span>m</div>
+        <div>VEL: <span id="speed">0</span> km/h</div>
+        <div>HP: <span id="health">100</span>/100</div>
+        <div>FUEL: <span id="fuel">100</span>%</div>
+        <div>G: <span id="gforce">1.0</span>g</div>
+    </div>
+    
+    <div id="targeting">
+        <div><strong>TARGETING</strong></div>
+        <div>Target: <span id="current-target">NINGUNO</span></div>
+        <div>Tipo: <span id="target-type">--</span></div>
+        <div>Distancia: <span id="target-distance">--</span>m</div>
+        <div>Lock: <span id="lock-status">--</span></div>
+    </div>
+    
+    <div id="battlefield">
+        <div><strong>CAMPO DE BATALLA</strong></div>
+        <div>Alpha: <span id="zone-alpha">NEUTRAL</span></div>
+        <div>Bravo: <span id="zone-bravo">NEUTRAL</span></div>
+        <div>Charlie: <span id="zone-charlie">NEUTRAL</span></div>
+        <div>Tanques Enemigos: <span id="enemy-tanks">0</span></div>
+        <div>Tanques Aliados: <span id="ally-tanks">0</span></div>
+    </div>
+    
+    <div id="weapons">
+        <div><strong>ARMAS</strong></div>
+        <div>Cañones: <span id="cannon-ammo">800</span></div>
+        <div>Misiles: <span id="missile-ammo">12</span></div>
+        <div>Kills Aire: <span id="air-kills">0</span></div>
+        <div>Kills Tierra: <span id="ground-kills">0</span></div>
+    </div>
+    
+    <div class="crosshair"></div>
+
+    <script>
+        // Variables globales
+        let scene, camera, renderer, airplane;
+        let enemyPlanes = [], allyPlanes = [], bullets = [], missiles = [];
+        let enemyTanks = [], allyTanks = [], explosions = [];
+        let captureZones = [], buildings = [];
+        let keys = {};
+        
+        // Variables de vuelo
+        let velocity = new THREE.Vector3(0, 0, 0);
+        let throttle = 0;
+        let pitch = 0, yaw = 0, roll = 0;
+        let altitude = 150;
+        let speed = 0;
+        let airplaneDirection = new THREE.Vector3(1, 0, 0);
+        let gForce = 1.0;
+        
+        // Variables de combate
+        let health = 100;
+        let fuel = 100;
+        let cannonAmmo = 800;
+        let missileAmmo = 12;
+        let currentTarget = null;
+        let lockedTarget = null;
+        let lockTimer = 0;
+        let airKills = 0;
+        let groundKills = 0;
+        let lastShot = 0;
+        
+        // Variables de cámara
+        let cameraMode = 'follow';
+        let cameraDistance = 50;
+        let cameraYaw = 0;
+        let cameraPitch = 0;
+        let mouseDown = false;
+        
+        function init() {
+            console.log("Inicializando juego...");
+            
+            // Crear escena
+            scene = new THREE.Scene();
+            scene.fog = new THREE.Fog(0x2c3e50, 600, 2500);
+            
+            // Configurar cámara
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 4000);
+            
+            // Configurar renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setClearColor(0x1a2332);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            document.body.appendChild(renderer.domElement);
+            
+            // Crear elementos del juego
+            createPlayerAirplane();
+            createEnvironment();
+            createCaptureZones();
+            createTanks();
+            createAirForces();
+            setupLights();
+            setupControls();
+            
+            console.log("Juego inicializado, comenzando animación...");
+            
+            // Iniciar bucle de juego
+            animate();
+        }
+        
+        function createPlayerAirplane() {
+            airplane = new THREE.Group();
+            
+            // Fuselaje principal
+            const fuselageGeometry = new THREE.CylinderGeometry(1.2, 1.6, 18, 12);
+            const fuselageMaterial = new THREE.MeshPhongMaterial({ 
+                color: 0x3a4a3a,
+                shininess: 150
+            });
+            const fuselage = new THREE.Mesh(fuselageGeometry, fuselageMaterial);
+            fuselage.rotation.z = Math.PI / 2;
+            fuselage.castShadow = true;
+            airplane.add(fuselage);
+            
+            // Nariz
+            const noseGeometry = new THREE.ConeGeometry(1.2, 4, 8);
+            const noseMaterial = new THREE.MeshPhongMaterial({ color: 0x2a3a2a });
+            const nose = new THREE.Mesh(noseGeometry, noseMaterial);
+            nose.rotation.z = -Math.PI / 2;
+            nose.position.x = 11;
+            airplane.add(nose);
+            
+            // Alas
+            const wingGeometry = new THREE.BoxGeometry(20, 0.8, 7);
+            const wingMaterial = new THREE.MeshPhongMaterial({ color: 0x3a4a3a });
+            const wings = new THREE.Mesh(wingGeometry, wingMaterial);
+            wings.position.z = -1.5;
+            wings.castShadow = true;
+            airplane.add(wings);
+            
+            // Cola
+            const tailGeometry = new THREE.BoxGeometry(0.6, 6, 3);
+            const tailMaterial = new THREE.MeshPhongMaterial({ color: 0x3a4a3a });
+            const tail = new THREE.Mesh(tailGeometry, tailMaterial);
+            tail.position.set(-8, 3, 0);
+            tail.castShadow = true;
+            airplane.add(tail);
+            
+            airplane.position.set(0, altitude, 0);
+            airplane.scale.set(2, 2, 2);
+            scene.add(airplane);
+            
+            console.log("Avión del jugador creado");
+        }
+        
+        function createEnvironment() {
+            // Cielo
+            const skyGeometry = new THREE.SphereGeometry(2000, 32, 32);
+            const skyMaterial = new THREE.MeshBasicMaterial({ 
+                color: 0x5588bb,
+                side: THREE.BackSide
+            });
+            const sky = new THREE.Mesh(skyGeometry, skyMaterial);
+            scene.add(sky);
+            
+            // Terreno
+            const terrainGeometry = new THREE.PlaneGeometry(4000, 4000, 100, 100);
+            const terrainMaterial = new THREE.MeshLambertMaterial({ color: 0x4a5d23 });
+            
+            const vertices = terrainGeometry.attributes.position.array;
+            for (let i = 0; i < vertices.length; i += 3) {
+                vertices[i + 2] = Math.random() * 20 - 10;
+            }
+            terrainGeometry.attributes.position.needsUpdate = true;
+            terrainGeometry.computeVertexNormals();
+            
+            const terrain = new THREE.Mesh(terrainGeometry, terrainMaterial);
+            terrain.rotation.x = -Math.PI / 2;
+            terrain.position.y = -30;
+            terrain.receiveShadow = true;
+            scene.add(terrain);
+            
+            // Ciudad
+            for (let i = 0; i < 20; i++) {
+                const height = 20 + Math.random() * 80;
+                const width = 10 + Math.random() * 15;
+                
+                const buildingGeometry = new THREE.BoxGeometry(width, height, width);
+                const buildingMaterial = new THREE.MeshLambertMaterial({ 
+                    color: Math.random() < 0.5 ? 0x8b0000 : 0x0000a0
+                });
+                const building = new THREE.Mesh(buildingGeometry, buildingMaterial);
+                
+                building.position.set(
+                    (Math.random() - 0.5) * 600,
+                    height / 2 - 30,
+                    (Math.random() - 0.5) * 600
+                );
+                
+                building.castShadow = true;
+                building.receiveShadow = true;
+                buildings.push(building);
+                scene.add(building);
+            }
+            
+            console.log("Entorno creado");
+        }
+        
+        function createCaptureZones() {
+            const zonePositions = [
+                { name: 'Alpha', pos: [150, -25, 150] },
+                { name: 'Bravo', pos: [-150, -25, 150] },
+                { name: 'Charlie', pos: [0, -25, -200] }
+            ];
+            
+            zonePositions.forEach((zoneData, index) => {
+                const zone = {
+                    name: zoneData.name,
+                    position: new THREE.Vector3(...zoneData.pos),
+                    radius: 60,
+                    controller: 'neutral',
+                    captureProgress: 0,
+                    lastUpdate: Date.now(),
+                    enemyUnits: 0,
+                    allyUnits: 0
+                };
+                
+                // Indicador visual
+                const zoneGeometry = new THREE.RingGeometry(zone.radius - 3, zone.radius + 3, 32);
+                const zoneMaterial = new THREE.MeshBasicMaterial({ 
+                    color: 0x888888,
+                    transparent: true,
+                    opacity: 0.5,
+                    side: THREE.DoubleSide
+                });
+                const zoneRing = new THREE.Mesh(zoneGeometry, zoneMaterial);
+                zoneRing.rotation.x = -Math.PI / 2;
+                zoneRing.position.copy(zone.position);
+                scene.add(zoneRing);
+                
+                zone.visual = zoneRing;
+                captureZones.push(zone);
+            });
+            
+            console.log("Zonas de captura creadas:", captureZones.length);
+        }
+        
+        function createTank(isEnemy = true) {
+            const tank = new THREE.Group();
+            
+            // Chasis
+            const chassisGeometry = new THREE.BoxGeometry(6, 2.5, 4);
+            const chassisMaterial = new THREE.MeshPhongMaterial({ 
+                color: isEnemy ? 0x660000 : 0x006600
+            });
+            const chassis = new THREE.Mesh(chassisGeometry, chassisMaterial);
+            chassis.position.y = 1.25;
+            chassis.castShadow = true;
+            tank.add(chassis);
+            
+            // Torreta
+            const turretGeometry = new THREE.CylinderGeometry(1.5, 2, 1.5, 8);
+            const turretMaterial = new THREE.MeshPhongMaterial({ 
+                color: isEnemy ? 0x440000 : 0x004400
+            });
+            const turret = new THREE.Mesh(turretGeometry, turretMaterial);
+            turret.position.y = 3;
+            turret.castShadow = true;
+            tank.add(turret);
+            
+            // Cañón
+            const cannonGeometry = new THREE.CylinderGeometry(0.15, 0.2, 4, 8);
+            const cannonMaterial = new THREE.MeshPhongMaterial({ color: 0x222222 });
+            const cannon = new THREE.Mesh(cannonGeometry, cannonMaterial);
+            cannon.rotation.z = Math.PI / 2;
+            cannon.position.set(2, 3, 0);
+            tank.add(cannon);
+            
+            return tank;
+        }
+        
+        function createTanks() {
+            // Tanques enemigos
+            for (let i = 0; i < 8; i++) {
+                const tank = createTank(true);
+                tank.position.set(
+                    100 + Math.random() * 400,
+                    -25,
+                    (Math.random() - 0.5) * 600
+                );
+                tank.rotation.y = Math.random() * Math.PI * 2;
+                tank.scale.set(1.5, 1.5, 1.5);
+                
+                tank.userData = {
+                    health: 100,
+                    maxHealth: 100,
+                    speed: 15,
+                    lastShot: 0,
+                    faction: 'enemy'
+                };
+                
+                enemyTanks.push(tank);
+                scene.add(tank);
+            }
+            
+            // Tanques aliados
+            for (let i = 0; i < 6; i++) {
+                const tank = createTank(false);
+                tank.position.set(
+                    -100 - Math.random() * 300,
+                    -25,
+                    (Math.random() - 0.5) * 500
+                );
+                tank.rotation.y = Math.random() * Math.PI * 2;
+                tank.scale.set(1.5, 1.5, 1.5);
+                
+                tank.userData = {
+                    health: 100,
+                    maxHealth: 100,
+                    speed: 18,
+                    lastShot: 0,
+                    faction: 'ally'
+                };
+                
+                allyTanks.push(tank);
+                scene.add(tank);
+            }
+            
+            console.log("Tanques creados - Enemigos:", enemyTanks.length, "Aliados:", allyTanks.length);
+        }
+        
+        function createEnemyJet() {
+            const jet = new THREE.Group();
+            
+            const fuselageGeometry = new THREE.CylinderGeometry(0.8, 1.2, 14, 8);
+            const fuselageMaterial = new THREE.MeshPhongMaterial({ color: 0x8b0000 });
+            const fuselage = new THREE.Mesh(fuselageGeometry, fuselageMaterial);
+            fuselage.rotation.z = Math.PI / 2;
+            fuselage.castShadow = true;
+            jet.add(fuselage);
+            
+            const wingGeometry = new THREE.BoxGeometry(14, 0.5, 4);
+            const wingMaterial = new THREE.MeshPhongMaterial({ color: 0x660000 });
+            const wings = new THREE.Mesh(wingGeometry, wingMaterial);
+            wings.position.z = -1;
+            wings.castShadow = true;
+            jet.add(wings);
+            
+            const tailGeometry = new THREE.BoxGeometry(0.3, 3, 1.5);
+            const tailMaterial = new THREE.MeshPhongMaterial({ color: 0x440000 });
+            const tail = new THREE.Mesh(tailGeometry, tailMaterial);
+            tail.position.set(-6, 1.5, 0);
+            jet.add(tail);
+            
+            return jet;
+        }
+        
+        function createAllyJet() {
+            const jet = new THREE.Group();
+            
+            const fuselageGeometry = new THREE.CylinderGeometry(0.8, 1.1, 12, 8);
+            const fuselageMaterial = new THREE.MeshPhongMaterial({ color: 0x0000a0 });
+            const fuselage = new THREE.Mesh(fuselageGeometry, fuselageMaterial);
+            fuselage.rotation.z = Math.PI / 2;
+            fuselage.castShadow = true;
+            jet.add(fuselage);
+            
+            const wingGeometry = new THREE.BoxGeometry(12, 0.4, 3.5);
+            const wingMaterial = new THREE.MeshPhongMaterial({ color: 0x000080 });
+            const wings = new THREE.Mesh(wingGeometry, wingMaterial);
+            wings.position.z = -0.8;
+            wings.castShadow = true;
+            jet.add(wings);
+            
+            const tailGeometry = new THREE.BoxGeometry(0.3, 3.5, 1.8);
+            const tailMaterial = new THREE.MeshPhongMaterial({ color: 0x000060 });
+            const tail = new THREE.Mesh(tailGeometry, tailMaterial);
+            tail.position.set(-5, 1.75, 0);
+            jet.add(tail);
+            
+            return jet;
+        }
+        
+        function createAirForces() {
+            // Aviones enemigos
+            for (let i = 0; i < 4; i++) {
+                const enemy = createEnemyJet();
+                enemy.position.set(
+                    300 + i * 80,
+                    100 + Math.random() * 50,
+                    (Math.random() - 0.5) * 400
+                );
+                enemy.rotation.y = Math.random() * Math.PI * 2;
+                enemy.scale.set(1.8, 1.8, 1.8);
+                
+                enemy.userData = {
+                    health: 80,
+                    maxHealth: 80,
+                    speed: 120,
+                    lastShot: 0,
+                    faction: 'enemy'
+                };
+                
+                enemyPlanes.push(enemy);
+                scene.add(enemy);
+            }
+            
+            // Aviones aliados
+            for (let i = 0; i < 3; i++) {
+                const ally = createAllyJet();
+                ally.position.set(
+                    -200 + i * -60,
+                    120 + Math.random() * 40,
+                    (Math.random() - 0.5) * 300
+                );
+                ally.rotation.y = Math.random() * Math.PI * 2;
+                ally.scale.set(1.6, 1.6, 1.6);
+                
+                ally.userData = {
+                    health: 90,
+                    maxHealth: 90,
+                    speed: 110,
+                    lastShot: 0,
+                    faction: 'ally'
+                };
+                
+                allyPlanes.push(ally);
+                scene.add(ally);
+            }
+            
+            console.log("Fuerzas aéreas creadas - Enemigos:", enemyPlanes.length, "Aliados:", allyPlanes.length);
+        }
+        
+        function setupLights() {
+            const sun = new THREE.DirectionalLight(0xffffff, 1.2);
+            sun.position.set(300, 400, 200);
+            sun.castShadow = true;
+            sun.shadow.mapSize.width = 2048;
+            sun.shadow.mapSize.height = 2048;
+            scene.add(sun);
+            
+            const ambientLight = new THREE.AmbientLight(0x404040, 0.5);
+            scene.add(ambientLight);
+        }
+        
+        function setupControls() {
+            document.addEventListener('keydown', (event) => {
+                keys[event.code] = true;
+                
+                if (event.code === 'Space') {
+                    fireCannon();
+                    event.preventDefault();
+                }
+                if (event.code === 'KeyX') {
+                    fireMissile();
+                    event.preventDefault();
+                }
+                if (event.code === 'KeyT') {
+                    cycleAirTargets();
+                    event.preventDefault();
+                }
+                if (event.code === 'KeyY') {
+                    cycleGroundTargets();
+                    event.preventDefault();
+                }
+                if (event.code === 'KeyR') {
+                    toggleLock();
+                    event.preventDefault();
+                }
+                if (event.code === 'KeyC') {
+                    resetCamera();
+                    event.preventDefault();
+                }
+            });
+            
+            document.addEventListener('keyup', (event) => {
+                keys[event.code] = false;
+            });
+            
+            // Controles de mouse
+            document.addEventListener('mousedown', (event) => {
+                if (event.button === 2) {
+                    mouseDown = true;
+                    cameraMode = 'free';
+                    event.preventDefault();
+                }
+            });
+            
+            document.addEventListener('mouseup', (event) => {
+                if (event.button === 2) {
+                    mouseDown = false;
+                    event.preventDefault();
+                }
+            });
+            
+            document.addEventListener('mousemove', (event) => {
+                if (mouseDown && cameraMode === 'free') {
+                    cameraYaw += event.movementX * 0.005;
+                    cameraPitch -= event.movementY * 0.005;
+                    cameraPitch = Math.max(-Math.PI/2, Math.min(Math.PI/2, cameraPitch));
+                }
+            });
+            
+            document.addEventListener('wheel', (event) => {
+                cameraDistance += event.deltaY * 0.1;
+                cameraDistance = Math.max(20, Math.min(150, cameraDistance));
+                event.preventDefault();
+            });
+            
+            document.addEventListener('contextmenu', (event) => {
+                event.preventDefault();
+            });
+        }
+        
+        function cycleAirTargets() {
+            const airTargets = enemyPlanes.filter(p => p.userData.health > 0);
+            if (airTargets.length > 0) {
+                const currentIndex = airTargets.indexOf(currentTarget);
+                const nextIndex = (currentIndex + 1) % airTargets.length;
+                currentTarget = airTargets[nextIndex];
+                lockedTarget = null;
+                lockTimer = 0;
+                console.log("Nuevo objetivo aéreo seleccionado");
+            }
+        }
+        
+        function cycleGroundTargets() {
+            const groundTargets = enemyTanks.filter(t => t.userData.health > 0);
+            if (groundTargets.length > 0) {
+                const currentIndex = groundTargets.indexOf(currentTarget);
+                const nextIndex = (currentIndex + 1) % groundTargets.length;
+                currentTarget = groundTargets[nextIndex];
+                lockedTarget = null;
+                lockTimer = 0;
+                console.log("Nuevo objetivo terrestre seleccionado");
+            }
+        }
+        
+        function toggleLock() {
+            if (currentTarget && currentTarget.userData.health > 0 && !lockedTarget) {
+                lockTimer = 0;
+                console.log("Iniciando lock...");
+            } else if (lockedTarget) {
+                lockedTarget = null;
+                lockTimer = 0;
+                console.log("Lock cancelado");
+            }
+        }
+        
+        function resetCamera() {
+            cameraMode = 'follow';
+            cameraDistance = 50;
+            cameraYaw = 0;
+            cameraPitch = 0;
+        }
+        
+        function fireCannon() {
+            if (cannonAmmo <= 0 || Date.now() - lastShot < 100) return;
+            
+            cannonAmmo -= 2;
+            lastShot = Date.now();
+            
+            for (let i = 0; i < 2; i++) {
+                const bullet = new THREE.Mesh(
+                    new THREE.SphereGeometry(0.15, 6, 6),
+                    new THREE.MeshBasicMaterial({ color: 0xffff00 })
+                );
+                
+                const bulletOffset = new THREE.Vector3(4, -1, i * 2 - 1);
+                bulletOffset.applyQuaternion(airplane.quaternion);
+                bullet.position.copy(airplane.position).add(bulletOffset);
+                
+                let bulletDirection;
+                
+                // Auto-aim hacia el objetivo actual si está disponible y en rango
+                if (currentTarget && currentTarget.userData.health > 0) {
+                    const distance = airplane.position.distanceTo(currentTarget.position);
+                    if (distance < 400) {
+                        // Calcular dirección hacia el objetivo con predicción
+                        const targetVelocity = new THREE.Vector3();
+                        if (currentTarget.userData.velocity) {
+                            targetVelocity.copy(currentTarget.userData.velocity);
+                        }
+                        
+                        const timeToTarget = distance / 12; // velocidad de la bala
+                        const predictedPosition = currentTarget.position.clone().add(
+                            targetVelocity.multiplyScalar(timeToTarget)
+                        );
+                        
+                        bulletDirection = predictedPosition.sub(bullet.position).normalize();
+                    } else {
+                        // Fuera de rango, disparar hacia adelante
+                        bulletDirection = new THREE.Vector3(1, 0, 0);
+                        bulletDirection.applyQuaternion(airplane.quaternion);
+                    }
+                } else {
+                    // Sin objetivo, disparar hacia adelante
+                    bulletDirection = new THREE.Vector3(1, 0, 0);
+                    bulletDirection.applyQuaternion(airplane.quaternion);
+                }
+                
+                bullet.userData = {
+                    velocity: bulletDirection.multiplyScalar(12),
+                    life: 120,
+                    damage: 20,
+                    owner: 'player'
+                };
+                
+                bullets.push(bullet);
+                scene.add(bullet);
+            }
+        }
+        
+        function fireMissile() {
+            if (missileAmmo <= 0 || !lockedTarget || lockedTarget.userData.health <= 0) {
+                console.log("No se puede disparar misil - Sin munición o sin objetivo bloqueado");
+                return;
+            }
+            
+            missileAmmo--;
+            console.log("Disparando misil hacia objetivo bloqueado");
+            
+            const missile = new THREE.Group();
+            
+            // Cuerpo del misil
+            const bodyGeometry = new THREE.CylinderGeometry(0.08, 0.1, 3, 8);
+            const bodyMaterial = new THREE.MeshPhongMaterial({ color: 0x444444 });
+            const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+            body.rotation.z = Math.PI / 2;
+            missile.add(body);
+            
+            // Cabeza del misil
+            const headGeometry = new THREE.ConeGeometry(0.08, 0.5, 8);
+            const headMaterial = new THREE.MeshPhongMaterial({ color: 0x666666 });
+            const head = new THREE.Mesh(headGeometry, headMaterial);
+            head.rotation.z = -Math.PI / 2;
+            head.position.x = 1.75;
+            missile.add(head);
+            
+            // Aletas
+            for (let i = 0; i < 4; i++) {
+                const finGeometry = new THREE.BoxGeometry(0.8, 0.05, 0.3);
+                const finMaterial = new THREE.MeshPhongMaterial({ color: 0x333333 });
+                const fin = new THREE.Mesh(finGeometry, finMaterial);
+                fin.position.set(-1, 0, 0);
+                fin.rotation.z = (i * Math.PI / 2);
+                missile.add(fin);
+            }
+            
+            const missileOffset = new THREE.Vector3(-2, -2, 0);
+            missileOffset.applyQuaternion(airplane.quaternion);
+            missile.position.copy(airplane.position).add(missileOffset);
+            
+            let initialDirection = new THREE.Vector3(1, 0, 0);
+            initialDirection.applyQuaternion(airplane.quaternion);
+            
+            missile.userData = {
+                velocity: initialDirection.multiplyScalar(3),
+                life: 800,
+                target: lockedTarget,
+                damage: 100,
+                fuel: 600,
+                turnRate: 0.05,
+                acceleration: 1.02
+            };
+            
+            missiles.push(missile);
+            scene.add(missile);
+        }
+        
+        function updateFlightControls() {
+            // Throttle
+            if (keys['KeyW']) throttle = Math.min(throttle + 0.02, 1);
+            if (keys['KeyS']) throttle = Math.max(throttle - 0.02, 0);
+            
+            // Controles
+            if (keys['ArrowUp']) pitch = Math.max(pitch - 0.02, -1.2);
+            if (keys['ArrowDown']) pitch = Math.min(pitch + 0.02, 1.2);
+            if (keys['KeyA']) yaw -= 0.015;
+            if (keys['KeyD']) yaw += 0.015;
+            if (keys['KeyQ']) roll = Math.max(roll - 0.03, -1.5);
+            if (keys['KeyE']) roll = Math.min(roll + 0.03, 1.5);
+            
+            // Estabilización
+            if (!keys['ArrowUp'] && !keys['ArrowDown']) pitch *= 0.95;
+            if (!keys['KeyQ'] && !keys['KeyE']) roll *= 0.93;
+            
+            // Velocidad
+            speed = throttle * 400;
+            
+            // Dirección
+            airplaneDirection.set(1, 0, 0);
+            airplaneDirection.applyQuaternion(airplane.quaternion);
+            
+            // Movimiento
+            const forwardSpeed = speed * 0.08;
+            velocity.x = airplaneDirection.x * forwardSpeed;
+            velocity.y = airplaneDirection.y * forwardSpeed + Math.sin(pitch) * 0.6;
+            velocity.z = airplaneDirection.z * forwardSpeed;
+            
+            // Gravedad
+            if (speed < 100) {
+                velocity.y -= 1.2;
+            } else {
+                velocity.y -= 0.4;
+            }
+            
+            if (speed > 80) {
+                velocity.y += (speed / 200) * Math.abs(Math.sin(pitch)) * 0.8;
+            }
+            
+            airplane.position.add(velocity.multiplyScalar(0.12));
+            
+            // Límite de altitud
+            if (airplane.position.y < 10) {
+                airplane.position.y = 10;
+                velocity.y = Math.max(velocity.y, 0);
+                health -= 2;
+            }
+            
+            // Rotaciones
+            airplane.rotation.x = pitch;
+            airplane.rotation.y = yaw;
+            airplane.rotation.z = roll;
+            
+            altitude = airplane.position.y;
+            fuel -= throttle * 0.02;
+            gForce = 1 + Math.abs(pitch) * 1.5 + Math.abs(roll);
+        }
+        
+        function updateCameraPosition() {
+            if (cameraMode === 'follow') {
+                const idealOffset = new THREE.Vector3(-cameraDistance, 20, 0);
+                idealOffset.applyQuaternion(airplane.quaternion);
+                const idealPosition = airplane.position.clone().add(idealOffset);
+                camera.position.lerp(idealPosition, 0.08);
+                const lookAtTarget = airplane.position.clone().add(airplaneDirection.multiplyScalar(30));
+                camera.lookAt(lookAtTarget);
+            } else if (cameraMode === 'free') {
+                const spherical = new THREE.Vector3();
+                spherical.x = cameraDistance * Math.cos(cameraPitch) * Math.cos(cameraYaw);
+                spherical.y = cameraDistance * Math.sin(cameraPitch);
+                spherical.z = cameraDistance * Math.cos(cameraPitch) * Math.sin(cameraYaw);
+                camera.position.copy(airplane.position).add(spherical);
+                camera.lookAt(airplane.position);
+            }
+        }
+        
+        function updateTargeting() {
+            if (currentTarget && currentTarget.userData && currentTarget.userData.health > 0) {
+                const distance = airplane.position.distanceTo(currentTarget.position);
+                if (distance < 600 && !lockedTarget) {
+                    lockTimer += 16;
+                    if (lockTimer >= 2000) {
+                        lockedTarget = currentTarget;
+                        console.log("Objetivo bloqueado!");
+                    }
+                }
+            } else {
+                lockTimer = 0;
+                lockedTarget = null;
+                if (currentTarget && currentTarget.userData.health <= 0) {
+                    currentTarget = null;
+                }
+            }
+        }
+        
+        function updateCaptureZones() {
+            captureZones.forEach(zone => {
+                zone.enemyUnits = 0;
+                zone.allyUnits = 0;
+                
+                // Contar tanques enemigos en la zona
+                enemyTanks.forEach(tank => {
+                    if (tank.userData.health > 0) {
+                        const distance = tank.position.distanceTo(zone.position);
+                        if (distance <= zone.radius) {
+                            zone.enemyUnits++;
+                        }
+                    }
+                });
+                
+                // Contar tanques aliados en la zona
+                allyTanks.forEach(tank => {
+                    if (tank.userData.health > 0) {
+                        const distance = tank.position.distanceTo(zone.position);
+                        if (distance <= zone.radius) {
+                            zone.allyUnits++;
+                        }
+                    }
+                });
+                
+                // Lógica de captura
+                const now = Date.now();
+                const timeDelta = now - zone.lastUpdate;
+                zone.lastUpdate = now;
+                
+                if (zone.enemyUnits > zone.allyUnits) {
+                    if (zone.controller !== 'enemy') {
+                        zone.captureProgress += (zone.enemyUnits - zone.allyUnits) * timeDelta * 0.001;
+                        if (zone.captureProgress >= 100) {
+                            zone.controller = 'enemy';
+                            zone.captureProgress = 100;
+                        }
+                    }
+                } else if (zone.allyUnits > zone.enemyUnits) {
+                    if (zone.controller !== 'ally') {
+                        zone.captureProgress += (zone.allyUnits - zone.enemyUnits) * timeDelta * 0.001;
+                        if (zone.captureProgress >= 100) {
+                            zone.controller = 'ally';
+                            zone.captureProgress = 100;
+                        }
+                    }
+                } else {
+                    // Neutral - decay progress
+                    if (zone.controller !== 'neutral') {
+                        zone.captureProgress -= timeDelta * 0.0005;
+                        if (zone.captureProgress <= 0) {
+                            zone.controller = 'neutral';
+                            zone.captureProgress = 0;
+                        }
+                    }
+                }
+                
+                // Actualizar colores visuales
+                let zoneColor = 0x888888;
+                
+                if (zone.controller === 'enemy') {
+                    zoneColor = 0xff0000;
+                } else if (zone.controller === 'ally') {
+                    zoneColor = 0x0000ff;
+                } else if (zone.captureProgress > 0) {
+                    if (zone.enemyUnits > zone.allyUnits) {
+                        zoneColor = 0xff4444;
+                    } else if (zone.allyUnits > zone.enemyUnits) {
+                        zoneColor = 0x4444ff;
+                    }
+                }
+                
+                zone.visual.material.color.setHex(zoneColor);
+            });
+        }
+        
+        function updateAI() {
+            // IA enemigos
+            enemyPlanes.forEach(enemy => {
+                if (enemy.userData.health <= 0) return;
+                
+                let targetEnemy = null;
+                let minDistance = Infinity;
+                
+                // Prioridad 1: Atacar al jugador si está cerca
+                const playerDistance = enemy.position.distanceTo(airplane.position);
+                if (playerDistance < 400) {
+                    targetEnemy = airplane;
+                    minDistance = playerDistance;
+                }
+                
+                // Prioridad 2: Atacar aviones aliados
+                if (!targetEnemy || minDistance > 300) {
+                    allyPlanes.forEach(ally => {
+                        if (ally.userData.health <= 0) return;
+                        const distance = enemy.position.distanceTo(ally.position);
+                        if (distance < 350 && distance < minDistance) {
+                            targetEnemy = ally;
+                            minDistance = distance;
+                        }
+                    });
+                }
+                
+                if (targetEnemy) {
+                    const direction = targetEnemy.position.clone().sub(enemy.position).normalize();
+                    const targetRotation = Math.atan2(direction.z, direction.x);
+                    enemy.rotation.y += (targetRotation - enemy.rotation.y) * 0.02;
+                    
+                    if (minDistance < 250 && Date.now() - enemy.userData.lastShot > 500) {
+                        const bullet = new THREE.Mesh(
+                            new THREE.SphereGeometry(0.1, 4, 4),
+                            new THREE.MeshBasicMaterial({ color: 0xff4444 })
+                        );
+                        bullet.position.copy(enemy.position);
+                        const bulletDirection = new THREE.Vector3(1, 0, 0);
+                        bulletDirection.applyQuaternion(enemy.quaternion);
+                        bullet.userData = {
+                            velocity: bulletDirection.multiplyScalar(8),
+                            life: 100,
+                            damage: 15,
+                            owner: 'enemy'
+                        };
+                        bullets.push(bullet);
+                        scene.add(bullet);
+                        enemy.userData.lastShot = Date.now();
+                    }
+                }
+                
+                const enemyDirection = new THREE.Vector3(1, 0, 0);
+                enemyDirection.applyQuaternion(enemy.quaternion);
+                enemy.position.add(enemyDirection.multiplyScalar(enemy.userData.speed * 0.01));
+                
+                if (enemy.position.y < 20) {
+                    enemy.position.y += 2;
+                    enemy.rotation.x = -0.2;
+                }
+            });
+            
+            // IA aliados
+            allyPlanes.forEach((ally, index) => {
+                if (ally.userData.health <= 0) return;
+                
+                let nearestEnemy = null;
+                let nearestDistance = Infinity;
+                
+                enemyPlanes.forEach(enemy => {
+                    if (enemy.userData.health <= 0) return;
+                    const distance = ally.position.distanceTo(enemy.position);
+                    if (distance < nearestDistance && distance < 350) {
+                        nearestDistance = distance;
+                        nearestEnemy = enemy;
+                    }
+                });
+                
+                if (nearestEnemy) {
+                    const direction = nearestEnemy.position.clone().sub(ally.position).normalize();
+                    const targetRotation = Math.atan2(direction.z, direction.x);
+                    ally.rotation.y += (targetRotation - ally.rotation.y) * 0.025;
+                    
+                    if (nearestDistance < 200 && Date.now() - ally.userData.lastShot > 400) {
+                        const bullet = new THREE.Mesh(
+                            new THREE.SphereGeometry(0.1, 4, 4),
+                            new THREE.MeshBasicMaterial({ color: 0x4444ff })
+                        );
+                        bullet.position.copy(ally.position);
+                        const bulletDirection = new THREE.Vector3(1, 0, 0);
+                        bulletDirection.applyQuaternion(ally.quaternion);
+                        bullet.userData = {
+                            velocity: bulletDirection.multiplyScalar(9),
+                            life: 120,
+                            damage: 18,
+                            owner: 'ally'
+                        };
+                        bullets.push(bullet);
+                        scene.add(bullet);
+                        ally.userData.lastShot = Date.now();
+                    }
+                }
+                
+                const allyDirection = new THREE.Vector3(1, 0, 0);
+                allyDirection.applyQuaternion(ally.quaternion);
+                ally.position.add(allyDirection.multiplyScalar(ally.userData.speed * 0.008));
+                
+                if (ally.position.y < 25) {
+                    ally.position.y += 1.5;
+                }
+            });
+            
+            // IA tanques enemigos
+            enemyTanks.forEach(tank => {
+                if (tank.userData.health <= 0) return;
+                
+                let target = null;
+                let minDistance = Infinity;
+                
+                // Buscar tanques aliados para atacar
+                allyTanks.forEach(ally => {
+                    if (ally.userData.health <= 0) return;
+                    const distance = tank.position.distanceTo(ally.position);
+                    if (distance < 200 && distance < minDistance) {
+                        target = ally;
+                        minDistance = distance;
+                    }
+                });
+                
+                if (target) {
+                    // Atacar tanque enemigo
+                    const direction = target.position.clone().sub(tank.position).normalize();
+                    const targetRotation = Math.atan2(direction.z, direction.x);
+                    tank.rotation.y += (targetRotation - tank.rotation.y) * 0.03;
+                    
+                    if (minDistance < 150 && Date.now() - tank.userData.lastShot > 800) {
+                        const bullet = new THREE.Mesh(
+                            new THREE.SphereGeometry(0.2, 6, 6),
+                            new THREE.MeshBasicMaterial({ color: 0xff6600 })
+                        );
+                        bullet.position.copy(tank.position);
+                        bullet.position.y += 3;
+                        const bulletDirection = new THREE.Vector3(1, 0, 0);
+                        bulletDirection.applyQuaternion(tank.quaternion);
+                        bullet.userData = {
+                            velocity: bulletDirection.multiplyScalar(6),
+                            life: 80,
+                            damage: 25,
+                            owner: 'enemy_tank'
+                        };
+                        bullets.push(bullet);
+                        scene.add(bullet);
+                        tank.userData.lastShot = Date.now();
+                    }
+                } else {
+                    // Moverse hacia zonas de captura
+                    let nearestZone = null;
+                    let nearestDistance = Infinity;
+                    
+                    captureZones.forEach(zone => {
+                        const distance = tank.position.distanceTo(zone.position);
+                        if (distance < nearestDistance) {
+                            nearestDistance = distance;
+                            nearestZone = zone;
+                        }
+                    });
+                    
+                    if (nearestZone && nearestDistance > nearestZone.radius) {
+                        const direction = nearestZone.position.clone().sub(tank.position).normalize();
+                        const targetRotation = Math.atan2(direction.z, direction.x);
+                        tank.rotation.y += (targetRotation - tank.rotation.y) * 0.02;
+                        
+                        const tankDirection = new THREE.Vector3(1, 0, 0);
+                        tankDirection.applyQuaternion(tank.quaternion);
+                        tank.position.add(tankDirection.multiplyScalar(tank.userData.speed * 0.006));
+                    }
+                }
+            });
+            
+            // IA tanques aliados
+            allyTanks.forEach(tank => {
+                if (tank.userData.health <= 0) return;
+                
+                let target = null;
+                let minDistance = Infinity;
+                
+                // Buscar tanques enemigos para atacar
+                enemyTanks.forEach(enemy => {
+                    if (enemy.userData.health <= 0) return;
+                    const distance = tank.position.distanceTo(enemy.position);
+                    if (distance < 200 && distance < minDistance) {
+                        target = enemy;
+                        minDistance = distance;
+                    }
+                });
+                
+                if (target) {
+                    // Atacar tanque enemigo
+                    const direction = target.position.clone().sub(tank.position).normalize();
+                    const targetRotation = Math.atan2(direction.z, direction.x);
+                    tank.rotation.y += (targetRotation - tank.rotation.y) * 0.035;
+                    
+                    if (minDistance < 150 && Date.now() - tank.userData.lastShot > 700) {
+                        const bullet = new THREE.Mesh(
+                            new THREE.SphereGeometry(0.2, 6, 6),
+                            new THREE.MeshBasicMaterial({ color: 0x00ff66 })
+                        );
+                        bullet.position.copy(tank.position);
+                        bullet.position.y += 3;
+                        const bulletDirection = new THREE.Vector3(1, 0, 0);
+                        bulletDirection.applyQuaternion(tank.quaternion);
+                        bullet.userData = {
+                            velocity: bulletDirection.multiplyScalar(6),
+                            life: 80,
+                            damage: 25,
+                            owner: 'ally_tank'
+                        };
+                        bullets.push(bullet);
+                        scene.add(bullet);
+                        tank.userData.lastShot = Date.now();
+                    }
+                } else {
+                    // Moverse hacia zonas de captura
+                    let nearestZone = null;
+                    let nearestDistance = Infinity;
+                    
+                    captureZones.forEach(zone => {
+                        const distance = tank.position.distanceTo(zone.position);
+                        if (distance < nearestDistance) {
+                            nearestDistance = distance;
+                            nearestZone = zone;
+                        }
+                    });
+                    
+                    if (nearestZone && nearestDistance > nearestZone.radius) {
+                        const direction = nearestZone.position.clone().sub(tank.position).normalize();
+                        const targetRotation = Math.atan2(direction.z, direction.x);
+                        tank.rotation.y += (targetRotation - tank.rotation.y) * 0.025;
+                        
+                        const tankDirection = new THREE.Vector3(1, 0, 0);
+                        tankDirection.applyQuaternion(tank.quaternion);
+                        tank.position.add(tankDirection.multiplyScalar(tank.userData.speed * 0.007));
+                    }
+                }
+            });
+        }
+        
+        function updateProjectiles() {
+            // Actualizar balas
+            for (let i = bullets.length - 1; i >= 0; i--) {
+                const bullet = bullets[i];
+                bullet.position.add(bullet.userData.velocity);
+                bullet.userData.life--;
+                
+                if (bullet.userData.life <= 0) {
+                    scene.remove(bullet);
+                    bullets.splice(i, 1);
+                    continue;
+                }
+                
+                if (bullet.userData.owner === 'player') {
+                    // Colisiones con aviones enemigos
+                    enemyPlanes.forEach((enemy, enemyIndex) => {
+                        if (enemy.userData.health <= 0) return;
+                        if (bullet.position.distanceTo(enemy.position) < 8) {
+                            enemy.userData.health -= bullet.userData.damage;
+                            createExplosion(bullet.position, 1);
+                            scene.remove(bullet);
+                            bullets.splice(i, 1);
+                            
+                            if (enemy.userData.health <= 0) {
+                                createExplosion(enemy.position, 2.5);
+                                airKills++;
+                            }
+                            return;
+                        }
+                    });
+                    
+                    // Colisiones con tanques enemigos
+                    enemyTanks.forEach((tank, tankIndex) => {
+                        if (tank.userData.health <= 0) return;
+                        if (bullet.position.distanceTo(tank.position) < 6) {
+                            tank.userData.health -= bullet.userData.damage;
+                            createExplosion(bullet.position, 1);
+                            scene.remove(bullet);
+                            bullets.splice(i, 1);
+                            
+                            if (tank.userData.health <= 0) {
+                                createExplosion(tank.position, 2.5);
+                                groundKills++;
+                            }
+                            return;
+                        }
+                    });
+                } else if (bullet.userData.owner === 'enemy') {
+                    // Colisión con jugador
+                    if (bullet.position.distanceTo(airplane.position) < 12) {
+                        health -= bullet.userData.damage;
+                        createExplosion(bullet.position, 1);
+                        scene.remove(bullet);
+                        bullets.splice(i, 1);
+                        continue;
+                    }
+                    
+                    // Colisiones con aviones aliados
+                    allyPlanes.forEach((ally, allyIndex) => {
+                        if (ally.userData.health <= 0) return;
+                        if (bullet.position.distanceTo(ally.position) < 8) {
+                            ally.userData.health -= bullet.userData.damage;
+                            createExplosion(bullet.position, 1);
+                            scene.remove(bullet);
+                            bullets.splice(i, 1);
+                            
+                            if (ally.userData.health <= 0) {
+                                createExplosion(ally.position, 2.5);
+                            }
+                            return;
+                        }
+                    });
+                } else if (bullet.userData.owner === 'ally') {
+                    // Colisiones con aviones enemigos
+                    enemyPlanes.forEach((enemy, enemyIndex) => {
+                        if (enemy.userData.health <= 0) return;
+                        if (bullet.position.distanceTo(enemy.position) < 8) {
+                            enemy.userData.health -= bullet.userData.damage;
+                            createExplosion(bullet.position, 1);
+                            scene.remove(bullet);
+                            bullets.splice(i, 1);
+                            
+                            if (enemy.userData.health <= 0) {
+                                createExplosion(enemy.position, 2.5);
+                            }
+                            return;
+                        }
+                    });
+                } else if (bullet.userData.owner === 'enemy_tank') {
+                    // Colisiones con tanques aliados
+                    allyTanks.forEach((ally, allyIndex) => {
+                        if (ally.userData.health <= 0) return;
+                        if (bullet.position.distanceTo(ally.position) < 6) {
+                            ally.userData.health -= bullet.userData.damage;
+                            createExplosion(bullet.position, 1.5);
+                            scene.remove(bullet);
+                            bullets.splice(i, 1);
+                            
+                            if (ally.userData.health <= 0) {
+                                createExplosion(ally.position, 2);
+                            }
+                            return;
+                        }
+                    });
+                } else if (bullet.userData.owner === 'ally_tank') {
+                    // Colisiones con tanques enemigos
+                    enemyTanks.forEach((enemy, enemyIndex) => {
+                        if (enemy.userData.health <= 0) return;
+                        if (bullet.position.distanceTo(enemy.position) < 6) {
+                            enemy.userData.health -= bullet.userData.damage;
+                            createExplosion(bullet.position, 1.5);
+                            scene.remove(bullet);
+                            bullets.splice(i, 1);
+                            
+                            if (enemy.userData.health <= 0) {
+                                createExplosion(enemy.position, 2);
+                            }
+                            return;
+                        }
+                    });
+                }
+            }
+            
+            // Actualizar misiles
+            for (let i = missiles.length - 1; i >= 0; i--) {
+                const missile = missiles[i];
+                
+                missile.userData.life--;
+                missile.userData.fuel--;
+                
+                if (missile.userData.life <= 0 || missile.userData.fuel <= 0) {
+                    createExplosion(missile.position, 3);
+                    scene.remove(missile);
+                    missiles.splice(i, 1);
+                    continue;
+                }
+                
+                // Teledirigido hacia el objetivo
+                if (missile.userData.target && missile.userData.target.userData && missile.userData.target.userData.health > 0) {
+                    const targetDirection = missile.userData.target.position.clone().sub(missile.position).normalize();
+                    missile.userData.velocity.lerp(targetDirection.multiplyScalar(missile.userData.velocity.length()), missile.userData.turnRate);
+                    
+                    // Acelerar gradualmente
+                    missile.userData.velocity.multiplyScalar(missile.userData.acceleration);
+                    
+                    // Orientar el misil hacia su velocidad
+                    const forward = missile.userData.velocity.clone().normalize();
+                    missile.lookAt(missile.position.clone().add(forward));
+                }
+                
+                missile.position.add(missile.userData.velocity);
+                
+                // Verificar colisiones con aviones enemigos
+                enemyPlanes.forEach((enemy, enemyIndex) => {
+                    if (enemy.userData.health <= 0) return;
+                    if (missile.position.distanceTo(enemy.position) < 12) {
+                        createExplosion(missile.position, 4);
+                        enemy.userData.health -= missile.userData.damage;
+                        scene.remove(missile);
+                        missiles.splice(i, 1);
+                        
+                        if (enemy.userData.health <= 0) {
+                            createExplosion(enemy.position, 3);
+                            airKills++;
+                        }
+                        return;
+                    }
+                });
+                
+                // Verificar colisiones con tanques enemigos
+                enemyTanks.forEach((tank, tankIndex) => {
+                    if (tank.userData.health <= 0) return;
+                    if (missile.position.distanceTo(tank.position) < 10) {
+                        createExplosion(missile.position, 4);
+                        tank.userData.health -= missile.userData.damage;
+                        scene.remove(missile);
+                        missiles.splice(i, 1);
+                        
+                        if (tank.userData.health <= 0) {
+                            createExplosion(tank.position, 3);
+                            groundKills++;
+                        }
+                        return;
+                    }
+                });
+                
+                // Colisión con el suelo
+                if (missile.position.y < -20) {
+                    createExplosion(missile.position, 3);
+                    scene.remove(missile);
+                    missiles.splice(i, 1);
+                }
+            }
+            
+            // Actualizar explosiones
+            for (let i = explosions.length - 1; i >= 0; i--) {
+                const explosion = explosions[i];
+                explosion.userData.life--;
+                
+                const scale = explosion.userData.life / explosion.userData.maxLife;
+                explosion.scale.set(scale, scale, scale);
+                
+                explosion.children.forEach(child => {
+                    child.material.opacity = scale * 0.8;
+                });
+                
+                if (explosion.userData.life <= 0) {
+                    scene.remove(explosion);
+                    explosions.splice(i, 1);
+                }
+            }
+        }
+        
+        function createExplosion(position, size = 1) {
+            const explosionGroup = new THREE.Group();
+            
+            const colors = [0xff3300, 0xff6600, 0xffaa00, 0xffff00, 0xff0000];
+            for (let i = 0; i < 8; i++) {
+                const sphereGeometry = new THREE.SphereGeometry(Math.random() * 3 * size + 2, 6, 6);
+                const sphereMaterial = new THREE.MeshBasicMaterial({ 
+                    color: colors[Math.floor(Math.random() * colors.length)],
+                    transparent: true,
+                    opacity: 0.8
+                });
+                const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
+                sphere.position.set(
+                    (Math.random() - 0.5) * 10 * size,
+                    (Math.random() - 0.5) * 10 * size,
+                    (Math.random() - 0.5) * 10 * size
+                );
+                explosionGroup.add(sphere);
+            }
+            
+            explosionGroup.position.copy(position);
+            explosionGroup.userData = { life: 30, maxLife: 30, size: size };
+            explosions.push(explosionGroup);
+            scene.add(explosionGroup);
+        }
+        
+        function updateTargetingUI() {
+            const existingBoxes = document.querySelectorAll('.target-box');
+            existingBoxes.forEach(box => box.remove());
+            
+            enemyPlanes.forEach((enemy, index) => {
+                if (enemy.userData.health <= 0) return;
+                
+                const distance = airplane.position.distanceTo(enemy.position);
+                if (distance > 800) return;
+                
+                const tempVector = new THREE.Vector3();
+                tempVector.copy(enemy.position);
+                tempVector.project(camera);
+                
+                const x = (tempVector.x * 0.5 + 0.5) * window.innerWidth;
+                const y = (tempVector.y * -0.5 + 0.5) * window.innerHeight;
+                
+                if (x >= 0 && x <= window.innerWidth && y >= 0 && y <= window.innerHeight && tempVector.z < 1) {
+                    const targetBox = document.createElement('div');
+                    targetBox.className = 'target-box air-target';
+                    targetBox.style.left = (x - 30) + 'px';
+                    targetBox.style.top = (y - 30) + 'px';
+                    
+                    if (enemy === currentTarget) {
+                        targetBox.style.borderColor = '#ffaa00';
+                    }
+                    if (enemy === lockedTarget) {
+                        targetBox.classList.add('locked');
+                    }
+                    
+                    document.body.appendChild(targetBox);
+                }
+            });
+            
+            enemyTanks.forEach((tank, index) => {
+                if (tank.userData.health <= 0) return;
+                
+                const distance = airplane.position.distanceTo(tank.position);
+                if (distance > 600) return;
+                
+                const tempVector = new THREE.Vector3();
+                tempVector.copy(tank.position);
+                tempVector.project(camera);
+                
+                const x = (tempVector.x * 0.5 + 0.5) * window.innerWidth;
+                const y = (tempVector.y * -0.5 + 0.5) * window.innerHeight;
+                
+                if (x >= 0 && x <= window.innerWidth && y >= 0 && y <= window.innerHeight && tempVector.z < 1) {
+                    const targetBox = document.createElement('div');
+                    targetBox.className = 'target-box ground-target';
+                    targetBox.style.left = (x - 40) + 'px';
+                    targetBox.style.top = (y - 25) + 'px';
+                    
+                    if (tank === currentTarget) {
+                        targetBox.style.borderColor = '#ffaa00';
+                    }
+                    if (tank === lockedTarget) {
+                        targetBox.classList.add('locked');
+                    }
+                    
+                    document.body.appendChild(targetBox);
+                }
+            });
+        }
+        
+        function updateHUD() {
+            document.getElementById('altitude').textContent = Math.round(altitude);
+            document.getElementById('speed').textContent = Math.round(speed);
+            document.getElementById('health').textContent = Math.max(0, Math.round(health));
+            document.getElementById('fuel').textContent = Math.max(0, Math.round(fuel));
+            document.getElementById('gforce').textContent = gForce.toFixed(1);
+            document.getElementById('cannon-ammo').textContent = cannonAmmo;
+            document.getElementById('missile-ammo').textContent = missileAmmo;
+            document.getElementById('air-kills').textContent = airKills;
+            document.getElementById('ground-kills').textContent = groundKills;
+            document.getElementById('enemy-tanks').textContent = enemyTanks.filter(t => t.userData.health > 0).length;
+            document.getElementById('ally-tanks').textContent = allyTanks.filter(t => t.userData.health > 0).length;
+            
+            // Actualizar estado de zonas
+            captureZones.forEach((zone, index) => {
+                const zoneIds = ['zone-alpha', 'zone-bravo', 'zone-charlie'];
+                let status = 'NEUTRAL';
+                if (zone.controller === 'enemy') status = 'ENEMIGO';
+                else if (zone.controller === 'ally') status = 'ALIADO';
+                else if (zone.captureProgress > 0) {
+                    if (zone.enemyUnits > zone.allyUnits) status = `CAPTURANDO E ${Math.round(zone.captureProgress)}%`;
+                    else if (zone.allyUnits > zone.enemyUnits) status = `CAPTURANDO A ${Math.round(zone.captureProgress)}%`;
+                }
+                document.getElementById(zoneIds[index]).textContent = status;
+            });
+            
+            if (currentTarget) {
+                const distance = airplane.position.distanceTo(currentTarget.position);
+                if (enemyPlanes.includes(currentTarget)) {
+                    document.getElementById('current-target').textContent = `AVIÓN-${enemyPlanes.indexOf(currentTarget) + 1}`;
+                    document.getElementById('target-type').textContent = 'CAZA ENEMIGO';
+                } else if (enemyTanks.includes(currentTarget)) {
+                    document.getElementById('current-target').textContent = `TANQUE-${enemyTanks.indexOf(currentTarget) + 1}`;
+                    document.getElementById('target-type').textContent = 'TANQUE ENEMIGO';
+                }
+                document.getElementById('target-distance').textContent = Math.round(distance);
+            } else {
+                document.getElementById('current-target').textContent = 'NINGUNO';
+                document.getElementById('target-type').textContent = '--';
+                document.getElementById('target-distance').textContent = '--';
+            }
+            
+            if (lockedTarget) {
+                document.getElementById('lock-status').textContent = 'LOCKED';
+            } else if (lockTimer > 0) {
+                document.getElementById('lock-status').textContent = `LOCKING ${Math.round(lockTimer/2000*100)}%`;
+            } else {
+                document.getElementById('lock-status').textContent = 'BUSCANDO';
+            }
+        }
+        
+        function checkVictoryCondition() {
+            const aliveEnemyPlanes = enemyPlanes.filter(p => p.userData.health > 0).length;
+            const aliveEnemyTanks = enemyTanks.filter(t => t.userData.health > 0).length;
+            
+            if (aliveEnemyPlanes === 0 && aliveEnemyTanks === 0) {
+                // Crear pantalla de victoria
+                const victoryScreen = document.createElement('div');
+                victoryScreen.style.cssText = `
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    width: 100vw;
+                    height: 100vh;
+                    background: rgba(0, 0, 0, 0.9);
+                    display: flex;
+                    flex-direction: column;
+                    justify-content: center;
+                    align-items: center;
+                    color: #00ff41;
+                    font-family: 'Courier New', monospace;
+                    font-size: 24px;
+                    font-weight: bold;
+                    z-index: 1000;
+                    text-align: center;
+                `;
+                
+                victoryScreen.innerHTML = `
+                    <div style="border: 3px solid #00ff41; padding: 40px; border-radius: 10px; background: rgba(0, 25, 0, 0.8);">
+                        <h1 style="color: #00ff41; font-size: 48px; margin: 0 0 20px 0; text-shadow: 0 0 10px #00ff41;">¡MISIÓN COMPLETADA!</h1>
+                        <div style="font-size: 20px; margin: 10px 0;">TODOS LOS ENEMIGOS ELIMINADOS</div>
+                        <div style="font-size: 16px; color: #ffaa44; margin: 20px 0;">
+                            <div>Kills Aéreos: ${airKills}</div>
+                            <div>Kills Terrestres: ${groundKills}</div>
+                            <div>Total de Kills: ${airKills + groundKills}</div>
+                        </div>
+                        <div style="font-size: 14px; color: #888888; margin-top: 30px;">
+                            Presiona F5 para jugar de nuevo
+                        </div>
+                    </div>
+                `;
+                
+                document.body.appendChild(victoryScreen);
+                
+                // Detener el juego
+                return true;
+            }
+            
+            return false;
+        }
+        
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            updateFlightControls();
+            updateCameraPosition();
+            updateTargeting();
+            updateCaptureZones();
+            updateAI();
+            updateProjectiles();
+            updateTargetingUI();
+            updateHUD();
+            
+            // Verificar condición de victoria
+            if (checkVictoryCondition()) {
+                return; // Detener el bucle de animación
+            }
+            
+            // Limpiar objetos destruidos
+            enemyPlanes = enemyPlanes.filter(plane => {
+                if (plane.userData.health <= 0) {
+                    scene.remove(plane);
+                    return false;
+                }
+                return true;
+            });
+            
+            enemyTanks = enemyTanks.filter(tank => {
+                if (tank.userData.health <= 0) {
+                    scene.remove(tank);
+                    return false;
+                }
+                return true;
+            });
+            
+            allyPlanes = allyPlanes.filter(plane => {
+                if (plane.userData.health <= 0) {
+                    scene.remove(plane);
+                    return false;
+                }
+                return true;
+            });
+            
+            allyTanks = allyTanks.filter(tank => {
+                if (tank.userData.health <= 0) {
+                    scene.remove(tank);
+                    return false;
+                }
+                return true;
+            });
+            
+            if (health <= 0) {
+                createExplosion(airplane.position, 3);
+                setTimeout(() => {
+                    alert(`¡Derribado! Kills Aéreos: ${airKills}, Kills Terrestres: ${groundKills}`);
+                    location.reload();
+                }, 1000);
+            }
+            
+            renderer.render(scene, camera);
+        }
+        
+        // Iniciar el juego cuando la página esté cargada
+        window.addEventListener('load', init);
+        
+    </script>
+</body>
+</html>
